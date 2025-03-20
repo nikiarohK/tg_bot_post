@@ -9,7 +9,6 @@ import asyncio
 from telethon import TelegramClient, events
 from telethon.tl.types import PeerChannel
 from config import api_hash, api_id, BOT_TOKEN
-# Настройки Telegram API
 
 # Инициализация бота и диспетчера
 bot = Bot(token=BOT_TOKEN)
@@ -26,14 +25,14 @@ if not os.path.exists(EXCEL_FILE):
     workbook = openpyxl.Workbook()
     sheet = workbook.active
     sheet.title = "Posts"
-    sheet.append(["Дата публикации", "Время публикации", "Название канала", "Содержание поста", "Количество реакций", "Количество комментариев"])
+    sheet.append(["Дата публикации", "Название канала", "Содержание поста", "Количество реакций"])
     workbook.save(EXCEL_FILE)
 
 # Функция для добавления данных в Excel
-def add_to_excel(date, time, channel_name, content, reactions, comments):
+def add_to_excel(date, channel_name, content, reactions):
     workbook = openpyxl.load_workbook(EXCEL_FILE)
     sheet = workbook.active
-    sheet.append([date, time, channel_name, content, reactions, comments])
+    sheet.append([date, channel_name, content, reactions])
     workbook.save(EXCEL_FILE)
 
 # Обработчик новых постов в каналах
@@ -41,19 +40,29 @@ def add_to_excel(date, time, channel_name, content, reactions, comments):
 async def new_post_listener(event):
     # Получаем информацию о канале
     if isinstance(event.peer_id, PeerChannel):
-        channel = await client.get_entity(event.peer_id)
-        channel_name = channel.title
+        try:
+            channel = await client.get_entity(event.peer_id)
+            channel_name = channel.title
 
-        # Получаем данные о посте
-        post_date = event.message.date.strftime('%Y-%m-%d')
-        post_time = event.message.date.strftime('%H:%M:%S')
-        post_content = event.message.text or "Медиа-сообщение (без текста)"
-        reactions = event.message.reactions.count if event.message.reactions else 0
-        comments = 0  # Количество комментариев можно получить через API, но это сложнее
+            # Получаем время публикации в UTC
+            post_date_utc = event.message.date
 
-        # Добавляем данные в Excel
-        add_to_excel(post_date, post_time, channel_name, post_content, reactions, comments)
-        print(f"Добавлен пост из канала {channel_name} в {post_date} {post_time}")
+            # Преобразуем время в московское
+            moscow_tz = pytz.timezone('Europe/Moscow')
+            post_date_moscow = post_date_utc.astimezone(moscow_tz)
+
+            # Форматируем дату (без времени)
+            post_date = post_date_moscow.strftime('%Y-%m-%d')  # Только дата
+
+            # Получаем содержание поста
+            post_content = event.message.text or "Медиа-сообщение (без текста)"
+            reactions = event.message.reactions.count if event.message.reactions else 0
+
+            # Добавляем данные в Excel
+            add_to_excel(post_date, channel_name, post_content, reactions)
+            print(f"Добавлен пост из канала {channel_name} в {post_date} (Московское время)")
+        except Exception as e:
+            print(f"Ошибка при обработке поста: {e}")
 
 # Команда /start
 @dp.message(Command("start"))
@@ -125,15 +134,11 @@ def filter_posts_by_current_month():
     filtered_posts = []
     for row in sheet.iter_rows(min_row=2, values_only=True):
         try:
-            # Пробуем парсить дату с временем
-            post_date = datetime.strptime(row[0], '%Y-%m-%d %H:%M:%S')
+            # Пробуем парсить дату
+            post_date = datetime.strptime(row[0], '%Y-%m-%d')
         except ValueError:
-            try:
-                # Если не получилось, пробуем парсить дату без времени
-                post_date = datetime.strptime(row[0], '%Y-%m-%d')
-            except ValueError:
-                # Если формат даты неизвестен, пропускаем запись
-                continue
+            # Если формат даты неизвестен, пропускаем запись
+            continue
 
         if post_date.month == current_month and post_date.year == current_year:
             filtered_posts.append(row)
@@ -149,15 +154,11 @@ def filter_posts_by_month(month):
     filtered_posts = []
     for row in sheet.iter_rows(min_row=2, values_only=True):
         try:
-            # Пробуем парсить дату с временем
-            post_date = datetime.strptime(row[0], '%Y-%m-%d %H:%M:%S')
+            # Пробуем парсить дату
+            post_date = datetime.strptime(row[0], '%Y-%m-%d')
         except ValueError:
-            try:
-                # Если не получилось, пробуем парсить дату без времени
-                post_date = datetime.strptime(row[0], '%Y-%m-%d')
-            except ValueError:
-                # Если формат даты неизвестен, пропускаем запись
-                continue
+            # Если формат даты неизвестен, пропускаем запись
+            continue
 
         if post_date.month == month and post_date.year == current_year:
             filtered_posts.append(row)
