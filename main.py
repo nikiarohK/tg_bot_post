@@ -38,29 +38,32 @@ def add_to_excel(date, channel_name, content, reactions):
 # Обработчик новых постов в каналах
 @client.on(events.NewMessage)
 async def new_post_listener(event):
-    # Получаем информацию о канале
+    # Проверяем, что сообщение пришло из канала
     if isinstance(event.peer_id, PeerChannel):
         try:
+            # Получаем информацию о канале
             channel = await client.get_entity(event.peer_id)
             channel_name = channel.title
 
-            # Получаем время публикации в UTC
-            post_date_utc = event.message.date
+            # Проверяем, что это пост, а не комментарий
+            if event.is_group or event.is_channel:
+                # Получаем время публикации в UTC
+                post_date_utc = event.message.date
 
-            # Преобразуем время в московское
-            moscow_tz = pytz.timezone('Europe/Moscow')
-            post_date_moscow = post_date_utc.astimezone(moscow_tz)
+                # Преобразуем время в московское
+                moscow_tz = pytz.timezone('Europe/Moscow')
+                post_date_moscow = post_date_utc.astimezone(moscow_tz)
 
-            # Форматируем дату (без времени)
-            post_date = post_date_moscow.strftime('%Y-%m-%d')  # Только дата
+                # Форматируем дату (без времени)
+                post_date = post_date_moscow.strftime('%Y-%m-%d')  # Только дата
 
-            # Получаем содержание поста
-            post_content = event.message.text or "Медиа-сообщение (без текста)"
-            reactions = event.message.reactions.count if event.message.reactions else 0
+                # Получаем содержание поста
+                post_content = event.message.text or "Медиа-сообщение (без текста)"
+                reactions = event.message.reactions.count if event.message.reactions else 0
 
-            # Добавляем данные в Excel
-            add_to_excel(post_date, channel_name, post_content, reactions)
-            print(f"Добавлен пост из канала {channel_name} в {post_date} (Московское время)")
+                # Добавляем данные в Excel
+                add_to_excel(post_date, channel_name, post_content, reactions)
+                print(f"Добавлен пост из канала {channel_name} в {post_date} (Московское время)")
         except Exception as e:
             print(f"Ошибка при обработке поста: {e}")
 
